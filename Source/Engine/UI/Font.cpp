@@ -212,6 +212,7 @@ bool FontFaceTTF::Load(const unsigned char* fontData, unsigned fontDataSize)
     }
 
     face_ = face;
+    rowHeight_ = (face->height * face->size->metrics.y_scale) >> 22;
 
     int texWidth = 0;
     int texHeight = 0;
@@ -352,8 +353,6 @@ bool FontFaceTTF::Load(const unsigned char* fontData, unsigned fontDataSize)
             glyph->iter_ = mutableGlyphList.Begin();
         }
     }
-
-    rowHeight_ = maxGlyphHeight_;
 
     return true;
 }
