@@ -23,6 +23,7 @@
 #pragma once
 
 #include "ArrayPtr.h"
+#include "List.h"
 #include "Resource.h"
 
 namespace Urho3D
@@ -31,10 +32,10 @@ namespace Urho3D
 class Font;
 class Graphics;
 class Image;
-class Texture;
+class Texture2D;
 
 static const int FONT_TEXTURE_MIN_SIZE = 128;
-static const int FONT_TEXTURE_MAX_SIZE = 2048;
+static const int FONT_TEXTURE_MAX_SIZE = 1024;
 static const int FONT_DPI = 96;
 
 /// %Font glyph description.
@@ -59,8 +60,6 @@ struct FontGlyph
     short advanceX_;
     /// Page.
     unsigned page_;
-    /// Kerning information.
-    HashMap<unsigned, unsigned> kerning_;
 };
 
 /// %Font file type.
@@ -84,13 +83,13 @@ public:
     /// Load font face.
     virtual bool Load(const unsigned char* fontData, unsigned fontDataSize) = 0;
     /// Return pointer to the glyph structure corresponding to a character. Return null if glyph not found.
-    const FontGlyph* GetGlyph(unsigned c) const;
+    virtual const FontGlyph* GetGlyph(unsigned c) const;
     /// Return the kerning for a character and the next character.
     short GetKerning(unsigned c, unsigned d) const;
     /// Return true when one of the texture has a data loss.
     bool IsDataLost() const;
     /// Load font face texture from image resource.
-    SharedPtr<Texture> LoadFaceTexture(SharedPtr<Image> image, bool staticTexture = true);
+    SharedPtr<Texture2D> LoadFaceTexture(SharedPtr<Image> image, bool staticTexture = true);
     /// Return total texture size.
     unsigned GetTotalTextureSize() const;
 
@@ -98,16 +97,26 @@ public:
     WeakPtr<Font> font_;
     /// Point size.
     int pointSize_;
-    /// Texture.
-    Vector<SharedPtr<Texture> > textures_;
-    /// Glyphs.
-    Vector<FontGlyph> glyphs_;
     /// Row height.
     int rowHeight_;
-    /// Glyph index mapping.
-    HashMap<unsigned, unsigned> glyphMapping_;
-    /// Kerning flag.
-    bool hasKerning_;
+    /// Texture.
+    Vector<SharedPtr<Texture2D> > textures_;
+    /// Glyph mapping.
+    HashMap<unsigned, FontGlyph> glyphMapping_;
+    /// Kerning mapping.
+    HashMap<unsigned, short> kerningMapping_;
+};
+
+/// True type font glyph description.
+struct FontGlyphTTF : public FontGlyph
+{
+    /// Construct.
+    FontGlyphTTF();
+
+    /// Char code.
+    unsigned char_;
+    /// Iteractor.
+    List<FontGlyphTTF*>::Iterator iter_;
 };
 
 /// Ture type font face description.
@@ -121,6 +130,23 @@ public:
 
     /// Load font face.
     virtual bool Load(const unsigned char* fontData, unsigned fontDataSize);
+    /// Return pointer to the glyph structure corresponding to a character. Return null if glyph not found.
+    virtual const FontGlyph* GetGlyph(unsigned c) const;
+
+private:
+    /// Calculate texture size, if too large return false.
+    bool CalculateTextureSize(int &texWidth, int &texHeight);
+
+    /// Font face.
+    void* face_;
+    /// Max glyph width.
+    int maxGlyphWidth_;
+    /// Max glyph height.
+    int maxGlyphHeight_;
+    /// Mutable glyph list.
+    mutable List<FontGlyphTTF*> mutableGlyphList;
+    /// Mutable glyph mapping.
+    mutable HashMap<unsigned, FontGlyphTTF*> mutableGlyphMap_;
 };
 
 /// Bitmap font face description.

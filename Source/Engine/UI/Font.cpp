@@ -79,53 +79,37 @@ FontGlyph::FontGlyph()
 }
 
 FontFace::FontFace(Font* font, int pointSize) : font_(font), 
-    pointSize_(pointSize), 
-    hasKerning_(false)
+    pointSize_(pointSize)
 {
 }
 
 FontFace::~FontFace()
 {
+
 }
 
 const FontGlyph* FontFace::GetGlyph(unsigned c) const
 {
-    HashMap<unsigned, unsigned>::ConstIterator i = glyphMapping_.Find(c);
+    HashMap<unsigned, FontGlyph>::ConstIterator i = glyphMapping_.Find(c);
     if (i != glyphMapping_.End())
-    {
-        const FontGlyph& glyph = glyphs_[i->second_];
-        return &glyph;
-    }
-    else
-        return NULL;
+        return &(i->second_);
+
+    return 0;
 }
 
 short FontFace::GetKerning(unsigned c, unsigned d) const
 {
-    if (!hasKerning_)
+    if (kerningMapping_.Empty())
         return 0;
-    
+
     if (c == '\n' || d == '\n')
         return 0;
     
-    unsigned leftIndex = 0;
-    unsigned rightIndex = 0;
-    HashMap<unsigned, unsigned>::ConstIterator leftIt = glyphMapping_.Find(c);
-    if (leftIt != glyphMapping_.End())
-        leftIndex = leftIt->second_;
-    else
-        return 0;
-    HashMap<unsigned, unsigned>::ConstIterator rightIt = glyphMapping_.Find(d);
-    if (rightIt != glyphMapping_.End())
-        rightIndex = rightIt->second_;
-    else
-        return 0;
-    
-    HashMap<unsigned, unsigned>::ConstIterator kerningIt = glyphs_[leftIndex].kerning_.Find(rightIndex);
-    if (kerningIt != glyphs_[leftIndex].kerning_.End())
-        return kerningIt->second_;
-    else
-        return 0;
+    HashMap<unsigned, short>::ConstIterator i = kerningMapping_.Find((c << 16) + d);
+    if (i != kerningMapping_.End())
+        return i->second_;
+
+    return 0;
 }
 
 bool FontFace::IsDataLost() const
@@ -138,7 +122,7 @@ bool FontFace::IsDataLost() const
     return false;
 }
 
-SharedPtr<Texture> FontFace::LoadFaceTexture(SharedPtr<Image> image, bool staticTexture)
+SharedPtr<Texture2D> FontFace::LoadFaceTexture(SharedPtr<Image> image, bool staticTexture)
 {
     Texture2D* texture = new Texture2D(font_->GetContext());
     texture->SetMipsToSkip(QUALITY_LOW, 0); // No quality reduction
@@ -150,9 +134,9 @@ SharedPtr<Texture> FontFace::LoadFaceTexture(SharedPtr<Image> image, bool static
     {
         delete texture;
         LOGERROR("Could not load texture from image resource");
-        return SharedPtr<Texture>();
+        return SharedPtr<Texture2D>();
     }
-    return SharedPtr<Texture>(texture);
+    return SharedPtr<Texture2D>(texture);
 }
 
 unsigned FontFace::GetTotalTextureSize() const
@@ -162,6 +146,12 @@ unsigned FontFace::GetTotalTextureSize() const
         totalTextureSize += textures_[i]->GetWidth() * textures_[i]->GetHeight();
 
     return totalTextureSize;
+}
+
+
+FontGlyphTTF::FontGlyphTTF() : char_(0)
+{
+    page_ = 0;
 }
 
 FontFaceTTF::FontFaceTTF(Font* font, int pointSize) : FontFace(font, pointSize)
@@ -185,149 +175,46 @@ bool FontFaceTTF::Load(const unsigned char* fontData, unsigned fontDataSize)
         return false;
     }
 
-    if (!fontDataSize)
+    if (fontDataSize == 0)
     {
         LOGERROR("Font not loaded");
         return false;
     }
 
-    Context* context_ = font_->GetContext();
+    Context* context = font_->GetContext();
 
-    // Create & initialize FreeType library if it does not exist yet
-    FreeTypeLibrary* freeType = context_->GetSubsystem<FreeTypeLibrary>();
+    // Create font face.
+    FreeTypeLibrary* freeType = context->GetSubsystem<FreeTypeLibrary>();
     if (!freeType)
-        context_->RegisterSubsystem(freeType = new FreeTypeLibrary(context_));
+        context->RegisterSubsystem(freeType = new FreeTypeLibrary(context));
 
-    FT_Face face;
-    FT_Error error;
     FT_Library library = freeType->GetLibrary();
-
-    error = FT_New_Memory_Face(library, &fontData[0], fontDataSize, 0, &face);
+    FT_Face face;
+    FT_Error error = FT_New_Memory_Face(library, &fontData[0], fontDataSize, 0, &face);
     if (error)
     {
         LOGERROR("Could not create font face");
         return false;
     }
+
     error = FT_Set_Char_Size(face, 0, pointSize_ * 64, FONT_DPI, FONT_DPI);
     if (error)
     {
-        FT_Done_Face(face);
         LOGERROR("Could not set font point size " + String(pointSize_));
         return false;
     }
 
-    FT_GlyphSlot slot = face->glyph;
-    unsigned numGlyphs = 0;
+    face_ = face;
 
-    // Build glyph mapping
-    FT_UInt glyphIndex;
-    FT_ULong charCode = FT_Get_First_Char(face, &glyphIndex);
-    while (glyphIndex != 0)
-    {
-        numGlyphs = Max((int)glyphIndex + 1, (int)numGlyphs);
-        glyphMapping_[charCode] = glyphIndex;
-        charCode = FT_Get_Next_Char(face, charCode, &glyphIndex);
-    }
-
-    LOGDEBUG(ToString("Font face %s (%dpt) has %d glyphs", GetFileName(font_->GetName()).CString(), pointSize_, numGlyphs));
-
-    // Load each of the glyphs to see the sizes & store other information
-    int maxHeight = 0;
-    FT_Pos ascender = face->size->metrics.ascender;
-
-    glyphs_.Reserve(numGlyphs);
-
-    for (unsigned i = 0; i < numGlyphs; ++i)
-    {
-        FontGlyph newGlyph;
-
-        error = FT_Load_Glyph(face, i, FT_LOAD_DEFAULT);
-        if (!error)
-        {
-            // Note: position within texture will be filled later
-            newGlyph.width_ = (short)((slot->metrics.width) >> 6);
-            newGlyph.height_ = (short)((slot->metrics.height) >> 6);
-            newGlyph.offsetX_ = (short)((slot->metrics.horiBearingX) >> 6);
-            newGlyph.offsetY_ = (short)((ascender - slot->metrics.horiBearingY) >> 6);
-            newGlyph.advanceX_ = (short)((slot->metrics.horiAdvance) >> 6);
-
-            maxHeight = Max(maxHeight, newGlyph.height_);
-        }
-        else
-        {
-            newGlyph.width_ = 0;
-            newGlyph.height_ = 0;
-            newGlyph.offsetX_ = 0;
-            newGlyph.offsetY_ = 0;
-            newGlyph.advanceX_ = 0;
-        }
-
-        glyphs_.Push(newGlyph);
-    }
-
-    // Store kerning if face has kerning information
-    if (FT_HAS_KERNING(face))
-    {
-        hasKerning_ = true;
-
-        for (unsigned i = 0; i < numGlyphs; ++i)
-        {
-            for (unsigned j = 0; j < numGlyphs; ++j)
-            {
-                FT_Vector vector;
-                FT_Get_Kerning(face, i, j, FT_KERNING_DEFAULT, &vector);
-                glyphs_[i].kerning_[j] = (short)(vector.x >> 6);
-            }
-        }
-    }
-
-    // Store point size and the height of a row. Use the height of the tallest font if taller than the specified row height
-    rowHeight_ = Max((face->size->metrics.height + 63) >> 6, maxHeight);
-
-    // Now try to pack into the smallest possible texture(s)
-    Vector<SharedPtr<Image> > images;
-    unsigned totalTextureSize = 0;
-    unsigned page = 0;
-    unsigned startIndex = 0;
-    unsigned index;
-    unsigned sumMaxOpacity = 0;
-    unsigned samples = 0;
-
-    while (startIndex < numGlyphs)
+    int texWidth = 0;
+    int texHeight = 0;
+    if (CalculateTextureSize(texWidth, texHeight))
     {
         AreaAllocator allocator(FONT_TEXTURE_MIN_SIZE, FONT_TEXTURE_MIN_SIZE, FONT_TEXTURE_MAX_SIZE, FONT_TEXTURE_MAX_SIZE);
-        for (index = startIndex; index < numGlyphs; ++index)
-        {
-            if (glyphs_[index].width_ && glyphs_[index].height_)
-            {
-                int x, y;
-                // Reserve an empty border between glyphs for filtering
-                if (allocator.Allocate(glyphs_[index].width_ + 1, glyphs_[index].height_ + 1, x, y))
-                {
-                    glyphs_[index].x_ = x;
-                    glyphs_[index].y_ = y;
-                    glyphs_[index].page_ = page;
-                }
-                else
-                    break;
-            }
-            else
-            {
-                glyphs_[index].x_ = 0;
-                glyphs_[index].y_ = 0;
-                glyphs_[index].page_ = 0;
-            }
-        }
-
-        int texWidth = allocator.GetWidth();
-        int texHeight = allocator.GetHeight();
-
-        // Create the image for rendering the fonts
-        SharedPtr<Image> image(new Image(context_));
-        images.Push(image);
+        
+        SharedPtr<Image> image(new Image(context));
         image->SetSize(texWidth, texHeight, 1);
-
-        // First clear the whole image
+        
         unsigned char* imageData = image->GetData();
         for (int y = 0; y < texHeight; ++y)
         {
@@ -335,77 +222,319 @@ bool FontFaceTTF::Load(const unsigned char* fontData, unsigned fontDataSize)
             memset(dest, 0, texWidth);
         }
 
-        // Render glyphs into texture, and find out a scaling value in case font uses less than full opacity (thin outlines)
-        for (unsigned i = startIndex; i < index; ++i)
+        FT_GlyphSlot slot = face->glyph;
+        FT_Pos ascender = face->size->metrics.ascender;
+
+        // Build glyph map.
+        FT_UInt glyphIndex;
+        PODVector<FT_ULong> charCodes;
+        FT_ULong charCode = FT_Get_First_Char(face, &glyphIndex);
+        while (glyphIndex != 0)
         {
-            if (!glyphs_[i].width_ || !glyphs_[i].height_)
-                continue;
+            FontGlyph glyph;
 
-            FT_Load_Glyph(face, i, FT_LOAD_DEFAULT);
-            FT_Render_Glyph(slot, FT_RENDER_MODE_NORMAL);
-
-            unsigned char glyphOpacity = 0;
-            for (int y = 0; y < glyphs_[i].height_; ++y)
+            FT_Error error = FT_Load_Char(face, charCode, FT_LOAD_RENDER);
+            if (!error)
             {
-                unsigned char* src = slot->bitmap.buffer + slot->bitmap.pitch * y;
-                unsigned char* dest = imageData + texWidth * (y + glyphs_[i].y_) + glyphs_[i].x_;
+                // Note: position within texture will be filled later
+                glyph.width_ = (short)((slot->metrics.width) >> 6);
+                glyph.height_ = (short)((slot->metrics.height) >> 6);
+                glyph.offsetX_ = (short)((slot->metrics.horiBearingX) >> 6);
+                glyph.offsetY_ = (short)((ascender - slot->metrics.horiBearingY) >> 6);
+                glyph.advanceX_ = (short)((slot->metrics.horiAdvance) >> 6);
+                glyph.page_ = 0;
 
-                for (int x = 0; x < glyphs_[i].width_; ++x)
+                rowHeight_ = Max(rowHeight_, glyph.height_);
+
+                int x, y;
+                if (allocator.Allocate(glyph.width_ + 1, glyph.height_ + 1, x, y))
                 {
-                    dest[x] = src[x];
-                    glyphOpacity = Max(glyphOpacity, src[x]);
+                    glyph.x_ = x;
+                    glyph.y_ = y;
+                }
+                else
+                {
+                    LOGERROR("Allocate area failed");
+                    return false;
+                }
+
+                // Copy glyph data to image.
+                if (glyph.width_ > 0 && glyph.height_ > 0)
+                {
+                    for (int h = 0; h < glyph.height_; ++h)
+                    {
+                        unsigned char* src = slot->bitmap.buffer + slot->bitmap.pitch * h;
+                        unsigned char* dest = imageData + texWidth * (h + glyph.y_) + glyph.x_;
+                        memcpy(dest, src, glyph.width_);
+                    }
                 }
             }
-            if (glyphOpacity)
+            else
             {
-                sumMaxOpacity += glyphOpacity;
-                ++samples;
-            }
+                glyph.x_ = 0;
+                glyph.y_ = 0;
+                glyph.width_ = 0;
+                glyph.height_ = 0;
+                glyph.offsetX_ = 0;
+                glyph.offsetY_ = 0;
+                glyph.advanceX_ = 0;
+                glyph.page_ = 0;
+            }            
+
+            charCodes.Push(charCode);
+            glyphMapping_[charCode] = glyph;
+
+            charCode = FT_Get_Next_Char(face, charCode, &glyphIndex);
         }
 
-        ++page;
-        startIndex = index;
-    }
-
-    // Clamp the minimum possible value to avoid overbrightening
-    unsigned char avgMaxOpacity = 255;
-    if (samples)
-        avgMaxOpacity = Max(sumMaxOpacity / samples, 128);
-
-    if (avgMaxOpacity < 255)
-    {
-        // Apply the scaling value if necessary
-        float scale = 255.0f / avgMaxOpacity;
-        for (unsigned i = 0; i < numGlyphs; ++i)
-        {
-            Image* image = images[glyphs_[i].page_];
-            unsigned char* imageData = image->GetData();
-            for (int y = 0; y < glyphs_[i].height_; ++y)
-            {
-                unsigned char* dest = imageData + image->GetWidth() * (y + glyphs_[i].y_) + glyphs_[i].x_;
-                for (int x = 0; x < glyphs_[i].width_; ++x)
-                {
-                    int pixel = dest[x];
-                    dest[x] = Min((int)(pixel * scale), 255);
-                }
-            }
-        }
-    }
-
-    // Create the texture and load the image into it
-    for (Vector<SharedPtr<Image> >::ConstIterator i = images.Begin(); i != images.End(); ++i)
-    {
-        int texWidth = i->Get()->GetWidth();
-        int texHeight = i->Get()->GetHeight();
-
-        SharedPtr<Texture> texture = LoadFaceTexture(*i);
+        SharedPtr<Texture2D> texture = LoadFaceTexture(image);
         if (!texture)
             return false;
         textures_.Push(texture);
-        totalTextureSize += texWidth * texHeight;
+
+        // Build kerning map.
+        if (FT_HAS_KERNING(face))
+        {
+            for (unsigned i = 0; i < charCodes.Size(); ++i)
+            {
+                FT_ULong c = charCodes[i];
+                FT_UInt ci = FT_Get_Char_Index(face, c);
+                for (unsigned j = 0; j < charCodes.Size(); ++j)
+                {
+                    FT_ULong d = charCodes[j];
+                    FT_UInt di = FT_Get_Char_Index(face, d);
+
+                    FT_Vector vector;
+                    FT_Get_Kerning(face, ci, di, FT_KERNING_DEFAULT, &vector);
+                    short amount = (short)(vector.x >> 6);
+                    if (amount != 0)
+                    {
+                        unsigned key = (c << 16) + d;
+                        kerningMapping_[key] = amount;
+                    }
+                }
+            }
+        }
+
+        return true;
     }
 
-    FT_Done_Face(face);
+    AreaAllocator allocator(FONT_TEXTURE_MIN_SIZE, FONT_TEXTURE_MIN_SIZE, FONT_TEXTURE_MAX_SIZE, FONT_TEXTURE_MAX_SIZE);
+
+    SharedPtr<Image> image(new Image(context));
+    image->SetSize(texWidth, texHeight, 1);
+
+    unsigned char* imageData = image->GetData();
+    for (int y = 0; y < texHeight; ++y)
+    {
+        unsigned char* dest = imageData + texWidth * y;
+        memset(dest, 0, texWidth);
+    }
+
+    FT_GlyphSlot slot = face->glyph;
+    FT_Pos ascender = face->size->metrics.ascender;
+
+    // Build ASCII glyph map.
+    FT_UInt glyphIndex;
+    PODVector<FT_ULong> charCodes;
+    FT_ULong charCode = FT_Get_First_Char(face, &glyphIndex);
+    while (glyphIndex != 0 && charCode < 256)
+    {
+        FontGlyph glyph;
+
+        FT_Error error = FT_Load_Char(face, charCode, FT_LOAD_RENDER);
+        if (!error)
+        {
+            // Note: position within texture will be filled later
+            glyph.width_ = (short)((slot->metrics.width) >> 6);
+            glyph.height_ = (short)((slot->metrics.height) >> 6);
+            glyph.offsetX_ = (short)((slot->metrics.horiBearingX) >> 6);
+            glyph.offsetY_ = (short)((ascender - slot->metrics.horiBearingY) >> 6);
+            glyph.advanceX_ = (short)((slot->metrics.horiAdvance) >> 6);
+            glyph.page_ = 0;
+
+            int x, y;
+            if (allocator.Allocate(glyph.width_ + 1, glyph.height_ + 1, x, y))
+            {
+                glyph.x_ = x;
+                glyph.y_ = y;
+            }
+            else
+            {
+                LOGERROR("Allocate area failed");
+                return false;
+            }
+
+            maxGlyphWidth_ = Max(maxGlyphWidth_, glyph.width_);
+            maxGlyphHeight_= Max(maxGlyphHeight_, glyph.height_);
+
+            // Copy glyph data to image.
+            if (glyph.width_ > 0 && glyph.height_ > 0)
+            {
+                for (int h = 0; h < glyph.height_; ++h)
+                {
+                    unsigned char* src = slot->bitmap.buffer + slot->bitmap.pitch * h;
+                    unsigned char* dest = imageData + texWidth * (h + glyph.y_) + glyph.x_;
+                    memcpy(dest, src, glyph.width_);
+                }
+            }
+        }
+        else
+        {
+            glyph.x_ = 0;
+            glyph.y_ = 0;
+            glyph.width_ = 0;
+            glyph.height_ = 0;
+            glyph.offsetX_ = 0;
+            glyph.offsetY_ = 0;
+            glyph.advanceX_ = 0;
+            glyph.page_ = 0;
+        }            
+
+        charCodes.Push(charCode);
+        glyphMapping_[charCode] = glyph;
+
+        charCode = FT_Get_Next_Char(face, charCode, &glyphIndex);
+    }
+
+    rowHeight_ = maxGlyphHeight_;
+
+    SharedPtr<Texture2D> texture = LoadFaceTexture(image, false);
+    if (!texture)
+        return false;
+    textures_.Push(texture);
+    
+    // Build kerning map.
+    if (FT_HAS_KERNING(face))
+    {
+        for (unsigned c = 0; c < 256; ++c)
+        {
+            FT_UInt ci = FT_Get_Char_Index(face, c);
+            for (unsigned d = 0; d < 256; ++d)
+            {
+                FT_UInt di = FT_Get_Char_Index(face, d);
+
+                FT_Vector vector;
+                FT_Get_Kerning(face, ci, di, FT_KERNING_DEFAULT, &vector);
+                short amount = (short)(vector.x >> 6);
+                if (amount != 0)
+                {
+                    unsigned key = (c << 16) + d;
+                    kerningMapping_[key] = amount;
+                }
+            }
+        }
+    }
+
+    // Build mutable glyph list.
+    int x, y;
+    while (allocator.Allocate(maxGlyphWidth_, maxGlyphHeight_, x, y))
+    {
+        FontGlyphTTF* glyph = new FontGlyphTTF;
+        glyph->x_ = x;
+        glyph->y_ = y;
+        glyph->page_ = 0;
+        glyph->char_ = 0;
+
+        mutableGlyphList.PushFront(glyph);
+        glyph->iter_ = mutableGlyphList.Begin();
+    }  
+
+    return true;
+}
+
+const FontGlyph* FontFaceTTF::GetGlyph(unsigned c) const
+{
+    if (mutableGlyphList.Empty())
+        return FontFace::GetGlyph(c);
+    
+    if (c < 256)
+        return FontFace::GetGlyph(c);
+
+    // Check existed in mutable glyph map.
+    HashMap<unsigned, FontGlyphTTF*>::ConstIterator i = mutableGlyphMap_.Find(c);
+    if (i != mutableGlyphMap_.End())
+    {
+        FontGlyphTTF* glyph = i->second_;
+
+        // Move to front.
+        mutableGlyphList.Erase(glyph->iter_);
+        mutableGlyphList.PushFront(glyph);
+        glyph->iter_ = mutableGlyphList.Begin();
+
+        return glyph;
+    }
+
+    FT_Face face = (FT_Face)face_;
+    FT_GlyphSlot slot = face->glyph;
+    FT_Pos ascender = face->size->metrics.ascender;
+    FT_Error error = FT_Load_Char(face, c, FT_LOAD_RENDER);
+    if (error)
+    {
+        return 0;
+    }
+    
+    FontGlyphTTF* glyph = mutableGlyphList.Back();
+    mutableGlyphList.Erase(glyph->iter_);
+    mutableGlyphList.PushFront(glyph);
+    glyph->iter_ = mutableGlyphList.Begin();
+
+    if (glyph->char_ != 0)
+        mutableGlyphMap_.Erase(glyph->char_);
+    glyph->char_ = c;
+    mutableGlyphMap_[glyph->char_] = glyph;
+
+    glyph->width_ = (short)((slot->metrics.width) >> 6);
+    glyph->height_ = (short)((slot->metrics.height) >> 6);
+    glyph->offsetX_ = (short)((slot->metrics.horiBearingX) >> 6);
+    glyph->offsetY_ = (short)((ascender - slot->metrics.horiBearingY) >> 6);
+    glyph->advanceX_ = (short)((slot->metrics.horiAdvance) >> 6);
+
+    SharedArrayPtr<unsigned char> data(new unsigned char[maxGlyphWidth_ * maxGlyphHeight_]);
+    memset(data, 0, maxGlyphWidth_ * maxGlyphHeight_);
+
+    for (int y = 0; y < glyph->height_; ++y)
+    {
+        unsigned char* src = slot->bitmap.buffer + slot->bitmap.pitch * y;
+        unsigned char* dest = data + maxGlyphWidth_ * y;
+        memcpy(dest, src, glyph->width_);
+    }
+
+    // Please tell me why this is not correct.
+    // textures_[0]->SetData(0, glyphTTF->x_, glyphTTF->y_, maxGlyphWidth_, maxGlyphHeight_, data);
+    textures_[0]->SetData(0, glyph->x_ / 2, glyph->y_ / 2, maxGlyphWidth_, maxGlyphHeight_, data);
+
+    return glyph;
+}
+
+bool FontFaceTTF::CalculateTextureSize(int &texWidth, int &texHeight)
+{
+    FT_Face face = (FT_Face)face_;
+    FT_GlyphSlot slot = face->glyph;
+    AreaAllocator allocator(FONT_TEXTURE_MIN_SIZE, FONT_TEXTURE_MIN_SIZE, FONT_TEXTURE_MAX_SIZE, FONT_TEXTURE_MAX_SIZE);
+    FT_UInt glyphIndex;
+    FT_ULong charCode = FT_Get_First_Char(face, &glyphIndex);
+
+    while (glyphIndex != 0)
+    {
+        FT_Error error = FT_Load_Char(face, charCode, FT_LOAD_DEFAULT);
+        if (!error)
+        {
+            int width_ = ((slot->metrics.width) >> 6);
+            int height_ = ((slot->metrics.height) >> 6);
+            int x, y;
+            if (!allocator.Allocate(width_ + 1, height_ + 1, x, y))
+            {
+                texWidth = FONT_TEXTURE_MAX_SIZE;
+                texHeight = FONT_TEXTURE_MAX_SIZE;
+                return false;
+            }
+        }
+        charCode = FT_Get_Next_Char(face, charCode, &glyphIndex);
+    }
+
+    texWidth = allocator.GetWidth();
+    texHeight = allocator.GetHeight();
 
     return true;
 }
@@ -426,6 +555,7 @@ bool FontFaceBitmap::Load(const unsigned char* fontData, unsigned fontDataSize)
         return false;
 
     Context* context_ = font_->GetContext();
+
     SharedPtr<XMLFile> xmlReader(new XMLFile(context_));
     MemoryBuffer memoryBuffer(fontData, fontDataSize);
     if (!xmlReader->Load(memoryBuffer))
@@ -481,18 +611,17 @@ bool FontFaceBitmap::Load(const unsigned char* fontData, unsigned fontDataSize)
             LOGERROR("Failed to load font image file");
             return false;
         }
-        SharedPtr<Texture> texture = LoadFaceTexture(fontImage);
+
+        SharedPtr<Texture2D> texture = LoadFaceTexture(fontImage);
         if (!texture)
             return false;
         textures_.Push(texture);
         totalTextureSize += fontImage->GetWidth() * fontImage->GetHeight() * fontImage->GetComponents();
-
         pageElem = pageElem.GetNext("page");
     }
 
     XMLElement charsElem = root.GetChild("chars");
     int count = charsElem.GetInt("count");
-    glyphs_.Reserve(count);
     unsigned index = 0;
 
     XMLElement charElem = charsElem.GetChild("char");
@@ -500,6 +629,7 @@ bool FontFaceBitmap::Load(const unsigned char* fontData, unsigned fontDataSize)
     {
         int id = charElem.GetInt("id");
         FontGlyph glyph;
+        
         glyph.x_ = charElem.GetInt("x");
         glyph.y_ = charElem.GetInt("y");
         glyph.width_ = charElem.GetInt("width");
@@ -508,29 +638,24 @@ bool FontFaceBitmap::Load(const unsigned char* fontData, unsigned fontDataSize)
         glyph.offsetY_ = charElem.GetInt("yoffset");
         glyph.advanceX_ = charElem.GetInt("xadvance");
         glyph.page_ = charElem.GetInt("page");
-        glyphs_.Push(glyph);
-        glyphMapping_[id] = index++;
+        glyphMapping_[id] = glyph;
 
         charElem = charElem.GetNext("char");
     }
 
     XMLElement kerningsElem = root.GetChild("kernings");
-    if (kerningsElem.IsNull())
-        hasKerning_ = false;
-    else
+    if (kerningsElem.NotNull())
     {
         XMLElement kerningElem = kerningsElem.GetChild("kerning");
         while (!kerningElem.IsNull())
         {
             int first = kerningElem.GetInt("first");
-            HashMap<unsigned, unsigned>::Iterator i = glyphMapping_.Find(first);
-            if (i != glyphMapping_.End())
+            int second = kerningElem.GetInt("second");
+            int amount = kerningElem.GetInt("amount");
+            if (amount != 0)
             {
-                int second = kerningElem.GetInt("second");
-                int amount = kerningElem.GetInt("amount");
-
-                FontGlyph& glyph = glyphs_[i->second_];
-                glyph.kerning_[second] = amount;
+                unsigned key = (first << 16) + second;
+                kerningMapping_[key] = (short)amount;
             }
 
             kerningElem = kerningElem.GetNext("kerning");
