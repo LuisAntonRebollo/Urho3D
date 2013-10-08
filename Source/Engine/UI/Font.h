@@ -135,7 +135,7 @@ public:
 
 private:
     /// Calculate texture size, if too large return false.
-    bool CalculateTextureSize(int &texWidth, int &texHeight);
+    void GetTextureSizeAndMaxCharCode(int &texWidth, int &texHeight, int& maxCharCode);
 
     /// Font face.
     void* face_;
