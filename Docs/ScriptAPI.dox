@@ -2426,7 +2426,7 @@ Methods:
 - void SetNumLevels(uint)
 - void ClearDataLost()
 - bool SetSize(int, int, uint, TextureUsage = TEXTURE_STATIC)
-- bool Load(Image@, bool = false)
+- bool Load(Image@, bool = false, TextureUsage = TEXTURE_STATIC)
 
 Properties:
 

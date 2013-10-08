@@ -166,9 +166,9 @@ static Viewport* ConstructViewportSceneCameraRect(Scene* scene, Camera* camera, 
     return new Viewport(GetScriptContext(), scene, camera, rect, renderPath);
 }
 
-static bool Texture2DLoad(Image* image, bool useAlpha, Texture2D* ptr)
+static bool Texture2DLoad(Image* image, bool useAlpha, TextureUsage usage, Texture2D* ptr)
 {
-    return ptr->Load(SharedPtr<Image>(image), useAlpha);
+    return ptr->Load(SharedPtr<Image>(image), useAlpha, usage);
 }
 
 static bool TextureCubeLoad(CubeMapFace face, Image* image, bool useAlpha, TextureCube* ptr)
@@ -434,7 +434,7 @@ static void RegisterTextures(asIScriptEngine* engine)
     
     RegisterTexture<Texture2D>(engine, "Texture2D");
     engine->RegisterObjectMethod("Texture2D", "bool SetSize(int, int, uint, TextureUsage usage = TEXTURE_STATIC)", asMETHOD(Texture2D, SetSize), asCALL_THISCALL);
-    engine->RegisterObjectMethod("Texture2D", "bool Load(Image@+, bool useAlpha = false)", asFUNCTION(Texture2DLoad), asCALL_CDECL_OBJLAST);
+    engine->RegisterObjectMethod("Texture2D", "bool Load(Image@+, bool useAlpha = false, TextureUsage usage = TEXTURE_STATIC)", asFUNCTION(Texture2DLoad), asCALL_CDECL_OBJLAST);
     engine->RegisterObjectMethod("Texture2D", "RenderSurface@+ get_renderSurface() const", asMETHOD(Texture2D, GetRenderSurface), asCALL_THISCALL);
     
     RegisterTexture<TextureCube>(engine, "TextureCube");

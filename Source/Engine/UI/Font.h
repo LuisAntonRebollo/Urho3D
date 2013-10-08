@@ -90,7 +90,7 @@ public:
     /// Return true when one of the texture has a data loss.
     bool IsDataLost() const;
     /// Load font face texture from image resource.
-    SharedPtr<Texture> LoadFaceTexture(SharedPtr<Image> image);
+    SharedPtr<Texture> LoadFaceTexture(SharedPtr<Image> image, bool staticTexture = true);
     /// Return total texture size.
     unsigned GetTotalTextureSize() const;
 

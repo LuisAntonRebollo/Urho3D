@@ -138,7 +138,7 @@ bool FontFace::IsDataLost() const
     return false;
 }
 
-SharedPtr<Texture> FontFace::LoadFaceTexture(SharedPtr<Image> image)
+SharedPtr<Texture> FontFace::LoadFaceTexture(SharedPtr<Image> image, bool staticTexture)
 {
     Texture2D* texture = new Texture2D(font_->GetContext());
     texture->SetMipsToSkip(QUALITY_LOW, 0); // No quality reduction
@@ -146,7 +146,7 @@ SharedPtr<Texture> FontFace::LoadFaceTexture(SharedPtr<Image> image)
     texture->SetAddressMode(COORD_U, ADDRESS_BORDER);
     texture->SetAddressMode(COORD_V, ADDRESS_BORDER),
         texture->SetBorderColor(Color(0.0f, 0.0f, 0.0f, 0.0f));
-    if (!texture->Load(image, true))
+    if (!texture->Load(image, true, staticTexture ? TEXTURE_STATIC : TEXTURE_DYNAMIC))
     {
         delete texture;
         LOGERROR("Could not load texture from image resource");
