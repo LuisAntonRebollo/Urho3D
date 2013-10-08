@@ -45,6 +45,7 @@ namespace Urho3D
 
 static const int MIN_POINT_SIZE = 1;
 static const int MAX_POINT_SIZE = 96;
+static const int MAX_ASCII_CODE = 255;
 
 /// FreeType library subsystem.
 class FreeTypeLibrary : public Object
@@ -321,7 +322,7 @@ bool FontFaceTTF::Load(const unsigned char* fontData, unsigned fontDataSize)
         }
     }
 
-    if (maxCharCode == 255)
+    if (maxCharCode == MAX_ASCII_CODE)
     {
         while (glyphIndex != 0)
         {
@@ -440,7 +441,7 @@ void FontFaceTTF::GetTextureSizeAndMaxCharCode(int &texWidth, int &texHeight, in
             {
                 texWidth = FONT_TEXTURE_MAX_SIZE;
                 texHeight = FONT_TEXTURE_MAX_SIZE;
-                maxCharCode = 255;
+                maxCharCode = MAX_ASCII_CODE;
                 return;
             }
 
