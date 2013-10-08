@@ -28,6 +28,7 @@
 namespace Urho3D
 {
 
+class Font;
 class Graphics;
 class Image;
 class Texture;
@@ -76,29 +77,63 @@ class URHO3D_API FontFace : public RefCounted
 {
 public:
     /// Construct.
-    FontFace();
+    FontFace(Font* font, int pointSize);
     /// Destruct.
-    ~FontFace();
+    virtual ~FontFace();
     
+    /// Load font face.
+    virtual bool Load(const unsigned char* fontData, unsigned fontDataSize) = 0;
     /// Return pointer to the glyph structure corresponding to a character. Return null if glyph not found.
     const FontGlyph* GetGlyph(unsigned c) const;
     /// Return the kerning for a character and the next character.
     short GetKerning(unsigned c, unsigned d) const;
     /// Return true when one of the texture has a data loss.
     bool IsDataLost() const;
-    
+    /// Load font face texture from image resource.
+    SharedPtr<Texture> LoadFaceTexture(SharedPtr<Image> image);
+    /// Return total texture size.
+    unsigned GetTotalTextureSize() const;
+
+    /// Font.
+    WeakPtr<Font> font_;
+    /// Point size.
+    int pointSize_;
     /// Texture.
     Vector<SharedPtr<Texture> > textures_;
     /// Glyphs.
     Vector<FontGlyph> glyphs_;
-    /// Point size.
-    int pointSize_;
     /// Row height.
     int rowHeight_;
     /// Glyph index mapping.
     HashMap<unsigned, unsigned> glyphMapping_;
     /// Kerning flag.
     bool hasKerning_;
+};
+
+/// Ture type font face description.
+class URHO3D_API FontFaceTTF : public FontFace
+{
+public:
+    /// Construct.
+    FontFaceTTF(Font* font, int pointSize);
+    /// Destruct.
+    virtual ~FontFaceTTF();
+
+    /// Load font face.
+    virtual bool Load(const unsigned char* fontData, unsigned fontDataSize);
+};
+
+/// Bitmap font face description.
+class URHO3D_API FontFaceBitmap : public FontFace
+{
+public:
+    /// Construct.
+    FontFaceBitmap(Font* font, int pointSize);
+    /// Destruct.
+    virtual ~FontFaceBitmap();
+
+    /// Load font face.
+    virtual bool Load(const unsigned char* fontData, unsigned fontDataSize);
 };
 
 /// %Font resource.
@@ -123,8 +158,6 @@ private:
     const FontFace* GetFaceTTF(int pointSize);
     /// Return bitmap font face. Called internally. Return null on error.
     const FontFace* GetFaceBitmap(int pointSize);
-    /// Load font face texture from image resource.
-    SharedPtr<Texture> LoadFaceTexture(SharedPtr<Image> image);
     
     /// Created faces.
     HashMap<int, SharedPtr<FontFace> > faces_;

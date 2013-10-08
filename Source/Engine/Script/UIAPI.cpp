@@ -41,7 +41,6 @@
 namespace Urho3D
 {
 
-
 static void RegisterFont(asIScriptEngine* engine)
 {
     RegisterResource<Font>(engine, "Font");
