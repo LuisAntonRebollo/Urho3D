@@ -270,11 +270,24 @@ bool FontFaceTTF::Load(const unsigned char* fontData, unsigned fontDataSize)
             // Copy glyph data to image.
             if (glyph.width_ > 0 && glyph.height_ > 0)
             {
-                for (int h = 0; h < glyph.height_; ++h)
+                if (slot->bitmap.pixel_mode == FT_PIXEL_MODE_MONO)
                 {
-                    unsigned char* src = slot->bitmap.buffer + slot->bitmap.pitch * h;
-                    unsigned char* dest = imageData + texWidth * (h + glyph.y_) + glyph.x_;
-                    memcpy(dest, src, glyph.width_);
+                    for (int h = 0; h < glyph.height_; ++h)
+                    {
+                        unsigned char* src = slot->bitmap.buffer + slot->bitmap.pitch * h;
+                        unsigned char* dest = imageData + texWidth * (h + glyph.y_) + glyph.x_;
+                        for (int w = 0; w < glyph.width_; ++w)
+                            dest[w] = (src[w / 8] & (0x80 >> (w & 7))) ? 0xFF : 0x00;
+                    }
+                }
+                else
+                {
+                    for (int h = 0; h < glyph.height_; ++h)
+                    {
+                        unsigned char* src = slot->bitmap.buffer + slot->bitmap.pitch * h;
+                        unsigned char* dest = imageData + texWidth * (h + glyph.y_) + glyph.x_;
+                        memcpy(dest, src, glyph.width_);
+                    }
                 }
             }
         }
@@ -407,11 +420,24 @@ const FontGlyph* FontFaceTTF::GetGlyph(unsigned c) const
     SharedArrayPtr<unsigned char> data(new unsigned char[maxGlyphWidth_ * maxGlyphHeight_]);
     memset(data, 0, maxGlyphWidth_ * maxGlyphHeight_);
 
-    for (int y = 0; y < glyph->height_; ++y)
+    if (slot->bitmap.pixel_mode == FT_PIXEL_MODE_MONO)
     {
-        unsigned char* src = slot->bitmap.buffer + slot->bitmap.pitch * y;
-        unsigned char* dest = data + maxGlyphWidth_ * y;
-        memcpy(dest, src, glyph->width_);
+        for (int y = 0; y < glyph->height_; ++y)
+        {
+            unsigned char* src = slot->bitmap.buffer + slot->bitmap.pitch * y;
+            unsigned char* dest = data + maxGlyphWidth_ * y;
+            for (int w = 0; w < glyph->width_; ++w)
+                dest[w] = (src[w / 8] & (0x80 >> (w & 7))) ? 0xFF : 0x00;
+        }
+    }
+    else
+    {
+        for (int y = 0; y < glyph->height_; ++y)
+        {
+            unsigned char* src = slot->bitmap.buffer + slot->bitmap.pitch * y;
+            unsigned char* dest = data + maxGlyphWidth_ * y;
+            memcpy(dest, src, glyph->width_);
+        }
     }
 
     // textures_[0]->SetData(0, glyphTTF->x_, glyphTTF->y_, maxGlyphWidth_, maxGlyphHeight_, data);
