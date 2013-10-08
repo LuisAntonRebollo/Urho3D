@@ -148,10 +148,9 @@ unsigned FontFace::GetTotalTextureSize() const
     return totalTextureSize;
 }
 
-
-FontGlyphTTF::FontGlyphTTF() : char_(0)
+MutableFontGlyph::MutableFontGlyph() : char_(0)
 {
-    page_ = 0;
+    
 }
 
 FontFaceTTF::FontFaceTTF(Font* font, int pointSize) : FontFace(font, pointSize)
@@ -430,7 +429,7 @@ bool FontFaceTTF::Load(const unsigned char* fontData, unsigned fontDataSize)
     int x, y;
     while (allocator.Allocate(maxGlyphWidth_, maxGlyphHeight_, x, y))
     {
-        FontGlyphTTF* glyph = new FontGlyphTTF;
+        MutableFontGlyph* glyph = new MutableFontGlyph;
         glyph->x_ = x;
         glyph->y_ = y;
         glyph->page_ = 0;
@@ -452,10 +451,10 @@ const FontGlyph* FontFaceTTF::GetGlyph(unsigned c) const
         return FontFace::GetGlyph(c);
 
     // Check existed in mutable glyph map.
-    HashMap<unsigned, FontGlyphTTF*>::ConstIterator i = mutableGlyphMap_.Find(c);
+    HashMap<unsigned, MutableFontGlyph*>::ConstIterator i = mutableGlyphMap_.Find(c);
     if (i != mutableGlyphMap_.End())
     {
-        FontGlyphTTF* glyph = i->second_;
+        MutableFontGlyph* glyph = i->second_;
 
         // Move to front.
         mutableGlyphList.Erase(glyph->iter_);
@@ -474,7 +473,7 @@ const FontGlyph* FontFaceTTF::GetGlyph(unsigned c) const
         return 0;
     }
     
-    FontGlyphTTF* glyph = mutableGlyphList.Back();
+    MutableFontGlyph* glyph = mutableGlyphList.Back();
     mutableGlyphList.Erase(glyph->iter_);
     mutableGlyphList.PushFront(glyph);
     glyph->iter_ = mutableGlyphList.Begin();

@@ -107,16 +107,16 @@ public:
     HashMap<unsigned, short> kerningMapping_;
 };
 
-/// True type font glyph description.
-struct FontGlyphTTF : public FontGlyph
+/// Mutable font glyph description.
+struct MutableFontGlyph : public FontGlyph
 {
     /// Construct.
-    FontGlyphTTF();
+    MutableFontGlyph();
 
     /// Char code.
     unsigned char_;
     /// Iteractor.
-    List<FontGlyphTTF*>::Iterator iter_;
+    List<MutableFontGlyph*>::Iterator iter_;
 };
 
 /// Ture type font face description.
@@ -144,9 +144,9 @@ private:
     /// Max glyph height.
     int maxGlyphHeight_;
     /// Mutable glyph list.
-    mutable List<FontGlyphTTF*> mutableGlyphList;
+    mutable List<MutableFontGlyph*> mutableGlyphList;
     /// Mutable glyph mapping.
-    mutable HashMap<unsigned, FontGlyphTTF*> mutableGlyphMap_;
+    mutable HashMap<unsigned, MutableFontGlyph*> mutableGlyphMap_;
 };
 
 /// Bitmap font face description.
