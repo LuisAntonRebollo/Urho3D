@@ -60,8 +60,6 @@ struct FontGlyph
     unsigned page_;
     /// Kerning information.
     HashMap<unsigned, unsigned> kerning_;
-    /// Used flag.
-    mutable bool used_;
 };
 
 /// %Font file type.
@@ -117,8 +115,6 @@ public:
     static void RegisterObject(Context* context);
     /// Load resource. Return true if successful.
     virtual bool Load(Deserializer& source);
-    /// Save resource as a new bitmap font type in XML format. Return true if successful.
-    bool SaveXML(Serializer& dest, int pointSize, bool usedGlyphs = false);
     /// Return font face. Pack and render to a texture if not rendered yet. Return null on error.
     const FontFace* GetFace(int pointSize);
     
@@ -127,16 +123,8 @@ private:
     const FontFace* GetFaceTTF(int pointSize);
     /// Return bitmap font face. Called internally. Return null on error.
     const FontFace* GetFaceBitmap(int pointSize);
-    /// Convert graphics format to number of components.
-    unsigned ConvertFormatToNumComponents(unsigned format);
-    /// Pack used glyphs into smallest texture size and smallest number of texture.
-    SharedPtr<FontFace> Pack(const FontFace* fontFace);
     /// Load font face texture from image resource.
     SharedPtr<Texture> LoadFaceTexture(SharedPtr<Image> image);
-    /// Save font face texture as image resource.
-    SharedPtr<Image> SaveFaceTexture(Texture* texture);
-    /// Save font face texture as image file.
-    bool SaveFaceTexture(Texture* texture, const String& fileName);
     
     /// Created faces.
     HashMap<int, SharedPtr<FontFace> > faces_;

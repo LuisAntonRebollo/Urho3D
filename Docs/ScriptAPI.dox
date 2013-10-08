@@ -4065,8 +4065,6 @@ Methods:
 - void SendEvent(const String&, VariantMap& = VariantMap ( ))
 - bool Load(File@)
 - bool Save(File@) const
-- bool SaveXML(File@, int, bool = false)
-- bool SaveXML(const String&, int, bool = false)
 
 Properties:
 
