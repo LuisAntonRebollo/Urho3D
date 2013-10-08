@@ -134,7 +134,7 @@ public:
     virtual const FontGlyph* GetGlyph(unsigned c) const;
 
 private:
-    /// Calculate texture size, if too large return false.
+    /// Calculate texture size and max char code.
     void GetTextureSizeAndMaxCharCode(int &texWidth, int &texHeight, int& maxCharCode);
 
     /// Font face.
