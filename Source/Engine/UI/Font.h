@@ -43,7 +43,7 @@ struct FontGlyph
 {
     /// Construct.
     FontGlyph();
-    
+
     /// X position in texture.
     short x_;
     /// Y position in texture.
@@ -79,7 +79,7 @@ public:
     FontFace(Font* font, int pointSize);
     /// Destruct.
     virtual ~FontFace();
-    
+
     /// Load font face.
     virtual bool Load(const unsigned char* fontData, unsigned fontDataSize) = 0;
     /// Return pointer to the glyph structure corresponding to a character. Return null if glyph not found.
@@ -134,8 +134,8 @@ public:
     virtual const FontGlyph* GetGlyph(unsigned c) const;
 
 private:
-    /// Calculate texture size and max char code.
-    void GetTextureSizeAndMaxCharCode(int &texWidth, int &texHeight, int& maxCharCode);
+    /// Return needed texture size and max char code.
+    void GetTextureSizeAndMaxCharCode(int& texWidth, int &texHeight, int& maxCharCode);
 
     /// Font face.
     void* face_;
@@ -166,7 +166,7 @@ public:
 class URHO3D_API Font : public Resource
 {
     OBJECT(Font);
-    
+
 public:
     /// Construct.
     Font(Context* context);
@@ -178,13 +178,13 @@ public:
     virtual bool Load(Deserializer& source);
     /// Return font face. Pack and render to a texture if not rendered yet. Return null on error.
     const FontFace* GetFace(int pointSize);
-    
+
 private:
     /// Return True-type font face. Called internally. Return null on error.
     const FontFace* GetFaceTTF(int pointSize);
     /// Return bitmap font face. Called internally. Return null on error.
     const FontFace* GetFaceBitmap(int pointSize);
-    
+
     /// Created faces.
     HashMap<int, SharedPtr<FontFace> > faces_;
     /// Font data.

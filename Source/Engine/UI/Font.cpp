@@ -45,7 +45,7 @@ namespace Urho3D
 
 static const int MIN_POINT_SIZE = 1;
 static const int MAX_POINT_SIZE = 96;
-static const int MAX_ASCII_CODE = 255;
+static const int MAX_ASCII_CODE = 127;
 
 /// FreeType library subsystem.
 class FreeTypeLibrary : public Object
@@ -79,7 +79,7 @@ FontGlyph::FontGlyph()
 {
 }
 
-FontFace::FontFace(Font* font, int pointSize) : font_(font), 
+FontFace::FontFace(Font* font, int pointSize) : font_(font),
     pointSize_(pointSize)
 {
 }
@@ -164,11 +164,11 @@ FontFaceTTF::~FontFaceTTF()
 {
    for (List<MutableFontGlyph*>::Iterator i = mutableGlyphList.Begin(); i != mutableGlyphList.End(); ++i)
        delete (*i);
-    
+
     // Freetype will call done face automatically.
     // if (face_)
     //     FT_Done_Face((FT_Face)face_);
-    
+
 }
 
 bool FontFaceTTF::Load(const unsigned char* fontData, unsigned fontDataSize)
@@ -301,7 +301,7 @@ bool FontFaceTTF::Load(const unsigned char* fontData, unsigned fontDataSize)
             glyph.offsetY_ = 0;
             glyph.advanceX_ = 0;
             glyph.page_ = 0;
-        }            
+        }
 
         charCodes.Push(charCode);
         glyphMapping_[charCode] = glyph;
@@ -372,10 +372,7 @@ bool FontFaceTTF::Load(const unsigned char* fontData, unsigned fontDataSize)
 
 const FontGlyph* FontFaceTTF::GetGlyph(unsigned c) const
 {
-    if (mutableGlyphList.Empty())
-        return FontFace::GetGlyph(c);
-
-    if (c < 256)
+    if (mutableGlyphList.Empty() || c <= MAX_ASCII_CODE)
         return FontFace::GetGlyph(c);
 
     // Check existed in mutable glyph map.
@@ -440,7 +437,7 @@ const FontGlyph* FontFaceTTF::GetGlyph(unsigned c) const
         }
     }
 
-    // textures_[0]->SetData(0, glyphTTF->x_, glyphTTF->y_, maxGlyphWidth_, maxGlyphHeight_, data);
+    // textures_[0]->SetData(0, glyph->x_, glyph->y_, maxGlyphWidth_, maxGlyphHeight_, data);
     textures_[0]->SetData(0, glyph->x_ / 2, glyph->y_ / 2, maxGlyphWidth_, maxGlyphHeight_, data);
 
     return glyph;
