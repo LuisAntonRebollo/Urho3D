@@ -237,7 +237,7 @@ bool Texture2D::SetData(unsigned level, int x, int y, int width, int height, con
     return true;
 }
 
-bool Texture2D::Load(SharedPtr<Image> image, bool useAlpha, TextureUsage usage)
+bool Texture2D::Load(SharedPtr<Image> image, bool useAlpha)
 {
     if (!image)
     {
@@ -288,7 +288,7 @@ bool Texture2D::Load(SharedPtr<Image> image, bool useAlpha, TextureUsage usage)
             break;
         }
         
-        SetSize(levelWidth, levelHeight, format, usage);
+        SetSize(levelWidth, levelHeight, format);
         if (!object_)
             return false;
         
@@ -329,7 +329,7 @@ bool Texture2D::Load(SharedPtr<Image> image, bool useAlpha, TextureUsage usage)
         height /= (1 << mipsToSkip);
         
         SetNumLevels(Max((int)(levels - mipsToSkip), 1));
-        SetSize(width, height, format, usage);
+        SetSize(width, height, format);
         
         for (unsigned i = 0; i < levels_ && i < levels - mipsToSkip; ++i)
         {
