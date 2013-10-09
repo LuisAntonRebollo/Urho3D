@@ -88,8 +88,6 @@ public:
     short GetKerning(unsigned c, unsigned d) const;
     /// Return true when one of the texture has a data loss.
     bool IsDataLost() const;
-    /// Load font face texture from image resource.
-    SharedPtr<Texture2D> LoadFaceTexture(SharedPtr<Image> image, bool staticTexture = true);
     /// Return total texture size.
     unsigned GetTotalTextureSize() const;
 
@@ -114,7 +112,7 @@ struct MutableFontGlyph : public FontGlyph
     MutableFontGlyph();
 
     /// Char code.
-    unsigned char_;
+    unsigned charCode_;
     /// Iteractor.
     List<MutableFontGlyph*>::Iterator iter_;
 };
@@ -136,6 +134,8 @@ public:
 private:
     /// Return needed texture size and max char code.
     void GetTextureSizeAndMaxCharCode(int& texWidth, int &texHeight, int& maxCharCode);
+    /// Create font face texture from data.
+    SharedPtr<Texture2D> CreateFaceTexture(int texWidth, int texHeight, unsigned char* texData);
 
     /// Font face.
     void* face_;
@@ -146,7 +146,7 @@ private:
     /// Mutable glyph list.
     mutable List<MutableFontGlyph*> mutableGlyphList;
     /// Mutable glyph mapping.
-    mutable HashMap<unsigned, MutableFontGlyph*> mutableGlyphMap_;
+    mutable HashMap<unsigned, MutableFontGlyph*> mutableGlyphMapping_;
 };
 
 /// Bitmap font face description.
@@ -160,6 +160,10 @@ public:
 
     /// Load font face.
     virtual bool Load(const unsigned char* fontData, unsigned fontDataSize);
+
+private:
+    /// Create font face texture from image resource.
+    SharedPtr<Texture2D> CreateFaceTexture(SharedPtr<Image> image);
 };
 
 /// %Font resource.

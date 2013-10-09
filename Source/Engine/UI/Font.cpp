@@ -43,8 +43,8 @@
 namespace Urho3D
 {
 
-static const int MIN_POINT_SIZE = 1;
-static const int MAX_POINT_SIZE = 96;
+static const int MIN_POINT_SIZE = 6;
+static const int MAX_POINT_SIZE = 48;
 static const int MAX_ASCII_CODE = 127;
 
 /// FreeType library subsystem.
@@ -65,14 +65,41 @@ public:
     /// Destruct.
     virtual ~FreeTypeLibrary()
     {
+        for (List<FT_Face>::Iterator i = faceList_.Begin(); i != faceList_.End(); ++i)
+            FT_Done_Face(*i);
+
         FT_Done_FreeType(library_);
     }
 
-    FT_Library GetLibrary() const { return library_; }
+    /// Create face.
+    FT_Face CreateFace(const unsigned char* fontData, unsigned fontDataSize, int pointSize)
+    {
+        FT_Face face;
+        FT_Error error = FT_New_Memory_Face(library_, fontData, fontDataSize, 0, &face);
+        if (error)
+        {
+            LOGERROR("Could not create font face");
+            return 0;
+        }
+
+        error = FT_Set_Char_Size(face, 0, pointSize * 64, FONT_DPI, FONT_DPI);
+        if (error)
+        {
+            LOGERROR("Could not set font point size " + String(pointSize));
+            FT_Done_Face(face);            
+            return 0;
+        }
+        
+        faceList_.Push(face);
+
+        return face;
+    }
 
 private:
     /// FreeType library.
     FT_Library library_;
+    /// Face list.
+    List<FT_Face> faceList_;
 };
 
 FontGlyph::FontGlyph()
@@ -123,23 +150,6 @@ bool FontFace::IsDataLost() const
     return false;
 }
 
-SharedPtr<Texture2D> FontFace::LoadFaceTexture(SharedPtr<Image> image, bool staticTexture)
-{
-    Texture2D* texture = new Texture2D(font_->GetContext());
-    texture->SetMipsToSkip(QUALITY_LOW, 0); // No quality reduction
-    texture->SetNumLevels(1); // No mipmaps
-    texture->SetAddressMode(COORD_U, ADDRESS_BORDER);
-    texture->SetAddressMode(COORD_V, ADDRESS_BORDER),
-        texture->SetBorderColor(Color(0.0f, 0.0f, 0.0f, 0.0f));
-    if (!texture->Load(image, true, staticTexture ? TEXTURE_STATIC : TEXTURE_DYNAMIC))
-    {
-        delete texture;
-        LOGERROR("Could not load texture from image resource");
-        return SharedPtr<Texture2D>();
-    }
-    return SharedPtr<Texture2D>(texture);
-}
-
 unsigned FontFace::GetTotalTextureSize() const
 {
     unsigned totalTextureSize = 0;
@@ -149,7 +159,7 @@ unsigned FontFace::GetTotalTextureSize() const
     return totalTextureSize;
 }
 
-MutableFontGlyph::MutableFontGlyph() : char_(0)
+MutableFontGlyph::MutableFontGlyph() : charCode_(0)
 {
 
 }
@@ -164,11 +174,6 @@ FontFaceTTF::~FontFaceTTF()
 {
    for (List<MutableFontGlyph*>::Iterator i = mutableGlyphList.Begin(); i != mutableGlyphList.End(); ++i)
        delete (*i);
-
-    // Freetype will call done face automatically.
-    // if (face_)
-    //     FT_Done_Face((FT_Face)face_);
-
 }
 
 bool FontFaceTTF::Load(const unsigned char* fontData, unsigned fontDataSize)
@@ -195,24 +200,13 @@ bool FontFaceTTF::Load(const unsigned char* fontData, unsigned fontDataSize)
     if (!freeType)
         context->RegisterSubsystem(freeType = new FreeTypeLibrary(context));
 
-    FT_Library library = freeType->GetLibrary();
-    FT_Face face;
-    FT_Error error = FT_New_Memory_Face(library, &fontData[0], fontDataSize, 0, &face);
-    if (error)
-    {
-        LOGERROR("Could not create font face");
+    FT_Face face = freeType->CreateFace(fontData, fontDataSize, pointSize_);
+    if (!face)
         return false;
-    }
-
-    error = FT_Set_Char_Size(face, 0, pointSize_ * 64, FONT_DPI, FONT_DPI);
-    if (error)
-    {
-        LOGERROR("Could not set font point size " + String(pointSize_));
-        return false;
-    }
 
     face_ = face;
-    rowHeight_ = (face->height * face->size->metrics.y_scale) >> 22;
+
+    rowHeight_ = (face->height * (face->size->metrics.y_scale >> 6)) >> 16;
 
     int texWidth = 0;
     int texHeight = 0;
@@ -220,13 +214,11 @@ bool FontFaceTTF::Load(const unsigned char* fontData, unsigned fontDataSize)
     GetTextureSizeAndMaxCharCode(texWidth, texHeight, maxCharCode);
 
     AreaAllocator allocator(FONT_TEXTURE_MIN_SIZE, FONT_TEXTURE_MIN_SIZE, FONT_TEXTURE_MAX_SIZE, FONT_TEXTURE_MAX_SIZE);
-    SharedPtr<Image> image(new Image(context));
-    image->SetSize(texWidth, texHeight, 1);
-
-    unsigned char* imageData = image->GetData();
+    
+    SharedArrayPtr<unsigned char> texData(new unsigned char[texWidth * texHeight]);
     for (int y = 0; y < texHeight; ++y)
     {
-        unsigned char* dest = imageData + texWidth * y;
+        unsigned char* dest = texData + texWidth * y;
         memset(dest, 0, texWidth);
     }
 
@@ -275,7 +267,7 @@ bool FontFaceTTF::Load(const unsigned char* fontData, unsigned fontDataSize)
                     for (int h = 0; h < glyph.height_; ++h)
                     {
                         unsigned char* src = slot->bitmap.buffer + slot->bitmap.pitch * h;
-                        unsigned char* dest = imageData + texWidth * (h + glyph.y_) + glyph.x_;
+                        unsigned char* dest = texData + texWidth * (h + glyph.y_) + glyph.x_;
                         for (int w = 0; w < glyph.width_; ++w)
                             dest[w] = (src[w / 8] & (0x80 >> (w & 7))) ? 0xFF : 0x00;
                     }
@@ -285,7 +277,7 @@ bool FontFaceTTF::Load(const unsigned char* fontData, unsigned fontDataSize)
                     for (int h = 0; h < glyph.height_; ++h)
                     {
                         unsigned char* src = slot->bitmap.buffer + slot->bitmap.pitch * h;
-                        unsigned char* dest = imageData + texWidth * (h + glyph.y_) + glyph.x_;
+                        unsigned char* dest = texData + texWidth * (h + glyph.y_) + glyph.x_;
                         memcpy(dest, src, glyph.width_);
                     }
                 }
@@ -309,7 +301,7 @@ bool FontFaceTTF::Load(const unsigned char* fontData, unsigned fontDataSize)
         charCode = FT_Get_Next_Char(face, charCode, &glyphIndex);
     }
 
-    SharedPtr<Texture2D> texture = LoadFaceTexture(image);
+    SharedPtr<Texture2D> texture = CreateFaceTexture(texWidth, texHeight, texData);
     if (!texture)
         return false;
     textures_.Push(texture);
@@ -360,7 +352,7 @@ bool FontFaceTTF::Load(const unsigned char* fontData, unsigned fontDataSize)
             glyph->x_ = x;
             glyph->y_ = y;
             glyph->page_ = 0;
-            glyph->char_ = 0;
+            glyph->charCode_ = 0;
 
             mutableGlyphList.PushFront(glyph);
             glyph->iter_ = mutableGlyphList.Begin();
@@ -376,8 +368,8 @@ const FontGlyph* FontFaceTTF::GetGlyph(unsigned c) const
         return FontFace::GetGlyph(c);
 
     // Check existed in mutable glyph map.
-    HashMap<unsigned, MutableFontGlyph*>::ConstIterator i = mutableGlyphMap_.Find(c);
-    if (i != mutableGlyphMap_.End())
+    HashMap<unsigned, MutableFontGlyph*>::ConstIterator i = mutableGlyphMapping_.Find(c);
+    if (i != mutableGlyphMapping_.End())
     {
         MutableFontGlyph* glyph = i->second_;
 
@@ -403,10 +395,10 @@ const FontGlyph* FontFaceTTF::GetGlyph(unsigned c) const
     mutableGlyphList.PushFront(glyph);
     glyph->iter_ = mutableGlyphList.Begin();
 
-    if (glyph->char_ != 0)
-        mutableGlyphMap_.Erase(glyph->char_);
-    glyph->char_ = c;
-    mutableGlyphMap_[glyph->char_] = glyph;
+    if (glyph->charCode_ != 0)
+        mutableGlyphMapping_.Erase(glyph->charCode_);
+    glyph->charCode_ = c;
+    mutableGlyphMapping_[glyph->charCode_] = glyph;
 
     glyph->width_ = (short)((slot->metrics.width) >> 6);
     glyph->height_ = (short)((slot->metrics.height) >> 6);
@@ -474,6 +466,33 @@ void FontFaceTTF::GetTextureSizeAndMaxCharCode(int &texWidth, int &texHeight, in
 
     texWidth = allocator.GetWidth();
     texHeight = allocator.GetHeight();
+}
+
+SharedPtr<Texture2D> FontFaceTTF::CreateFaceTexture(int texWidth, int texHeight, unsigned char* texData)
+{
+    if (texWidth == 0 || texHeight == 0 || !texData)
+        return SharedPtr<Texture2D>();
+
+    Graphics* graphcs = font_->GetContext()->GetSubsystem<Graphics>();
+    if (!graphcs)
+        return SharedPtr<Texture2D>();
+
+    SharedPtr<Texture2D> texture(new Texture2D(font_->GetContext()));
+    texture->SetMipsToSkip(QUALITY_LOW, 0);
+    texture->SetNumLevels(1);
+    if (!texture->SetSize(texWidth, texHeight, graphcs->GetAlphaFormat()))
+    {
+        LOGERROR("Could not set texture size");
+        return SharedPtr<Texture2D>();
+    }
+
+    if (!texture->SetData(0, 0, 0, texWidth, texHeight, texData))
+    {
+        LOGERROR("Could not set texture data");
+        return SharedPtr<Texture2D>();
+    }
+
+    return texture;
 }
 
 FontFaceBitmap::FontFaceBitmap(Font* font, int pointSize) : FontFace(font, pointSize)
@@ -549,7 +568,7 @@ bool FontFaceBitmap::Load(const unsigned char* fontData, unsigned fontDataSize)
             return false;
         }
 
-        SharedPtr<Texture2D> texture = LoadFaceTexture(fontImage);
+        SharedPtr<Texture2D> texture = CreateFaceTexture(fontImage);
         if (!texture)
             return false;
         textures_.Push(texture);
@@ -602,6 +621,19 @@ bool FontFaceBitmap::Load(const unsigned char* fontData, unsigned fontDataSize)
     LOGDEBUG(ToString("Bitmap font face %s has %d glyphs", GetFileName(font_->GetName()).CString(), count));
 
     return true;
+}
+
+SharedPtr<Texture2D> FontFaceBitmap::CreateFaceTexture(SharedPtr<Image> image)
+{
+    SharedPtr<Texture2D> texture(new Texture2D(font_->GetContext()));
+    texture->SetMipsToSkip(QUALITY_LOW, 0);
+    texture->SetNumLevels(1);
+    if (!texture->Load(image, true))
+    {
+        LOGERROR("Could not load texture from image resource");
+        return SharedPtr<Texture2D>();
+    }
+    return SharedPtr<Texture2D>(texture);
 }
 
 Font::Font(Context* context) :
