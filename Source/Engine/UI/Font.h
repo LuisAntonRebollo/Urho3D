@@ -114,7 +114,7 @@ struct MutableFontGlyph : public FontGlyph
     /// Char code.
     unsigned charCode_;
     /// Iteractor.
-    List<MutableFontGlyph*>::Iterator iter_;
+    List<MutableFontGlyph*>::Iterator iterator_;
 };
 
 /// Ture type font face description.
@@ -132,8 +132,6 @@ public:
     virtual const FontGlyph* GetGlyph(unsigned c) const;
 
 private:
-    /// Return needed texture size and max char code.
-    void GetTextureSizeAndMaxCharCode(int& texWidth, int &texHeight, int& maxCharCode);
     /// Create font face texture from data.
     SharedPtr<Texture2D> CreateFaceTexture(int texWidth, int texHeight, unsigned char* texData);
 
