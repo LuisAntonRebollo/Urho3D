@@ -474,11 +474,14 @@ const FontGlyph* FontFaceTTF::GetGlyph(unsigned c) const
         }
     }
 
+	textures_[0]->SetData(0, glyph->x_, glyph->y_, maxGlyphWidth_, maxGlyphHeight_, data);
+	/*
 #ifdef USE_OPENGL
     textures_[0]->SetData(0, glyph->x_, textures_[0]->GetHeight() - maxGlyphHeight_ - glyph->y_, maxGlyphWidth_, maxGlyphHeight_, data);
 #else
     textures_[0]->SetData(0, glyph->x_ / 2, glyph->y_ / 2, maxGlyphWidth_, maxGlyphHeight_, data);
 #endif
+	*/
 
     return glyph;
 }
