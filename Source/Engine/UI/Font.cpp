@@ -47,6 +47,8 @@ namespace Urho3D
 static const int MIN_POINT_SIZE = 6;
 static const int MAX_POINT_SIZE = 48;
 static const int MAX_ASCII_CODE = 127;
+static const int MIN_TEXTURE_SIZE = 128;
+static const int MAX_TEXTURE_SIZE = 1024;
 
 /// FreeType library subsystem.
 class FreeTypeLibrary : public Object
@@ -82,8 +84,9 @@ public:
             LOGERROR("Could not create font face");
             return 0;
         }
-
-        error = FT_Set_Char_Size(face, 0, pointSize * 64, FONT_DPI, FONT_DPI);
+        
+        const int fontDPI = 96;
+        error = FT_Set_Char_Size(face, 0, pointSize * 64, fontDPI, fontDPI);
         if (error)
         {
             LOGERROR("Could not set font point size " + String(pointSize));
@@ -464,7 +467,7 @@ bool FontFaceTTF::CalculateTextureSize(int &texWidth, int &texHeight)
     bool loadAllGlyphs = true;
     
     FT_Face face = (FT_Face)face_;
-    AreaAllocator allocator(FONT_TEXTURE_MIN_SIZE, FONT_TEXTURE_MIN_SIZE, FONT_TEXTURE_MAX_SIZE, FONT_TEXTURE_MAX_SIZE);
+    AreaAllocator allocator(MIN_TEXTURE_SIZE, MIN_TEXTURE_SIZE, MAX_TEXTURE_SIZE, MAX_TEXTURE_SIZE);
 
     FT_UInt glyphIndex;
     FT_ULong charCode = FT_Get_First_Char(face, &glyphIndex);

@@ -30,13 +30,8 @@ namespace Urho3D
 {
 
 class Font;
-class Graphics;
 class Image;
 class Texture2D;
-
-static const int FONT_TEXTURE_MIN_SIZE = 128;
-static const int FONT_TEXTURE_MAX_SIZE = 1024;
-static const int FONT_DPI = 96;
 
 /// %Font glyph description.
 struct FontGlyph
