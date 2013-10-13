@@ -208,28 +208,9 @@ bool FontFaceTTF::Load(const unsigned char* fontData, unsigned fontDataSize)
     face_ = face;
     rowHeight_ = (face->height * (face->size->metrics.y_scale >> 6)) >> 16;
 
-    maxGlyphWidth_ = face->size->metrics.height >> 6;
-    maxGlyphHeight_ = face->size->metrics.max_advance >> 6;
-
-    // Calculate texture size approximately
-    int numGlyphs = (int)face->num_glyphs;
-    int texWidth = FONT_TEXTURE_MIN_SIZE;
-    int texHeight = FONT_TEXTURE_MIN_SIZE;
-    while ((texWidth / maxGlyphWidth_) * (texHeight / maxGlyphHeight_) < numGlyphs)
-    {
-        if (texWidth < texHeight)
-            texWidth *= 2;
-        else
-            texHeight *=2;
-    }
-
-    bool loadAllGlyphs = true;
-    if (texWidth > FONT_TEXTURE_MAX_SIZE || texHeight > FONT_TEXTURE_MAX_SIZE)
-    {
-        loadAllGlyphs = false;
-        texWidth = FONT_TEXTURE_MAX_SIZE;
-        texHeight = FONT_TEXTURE_MAX_SIZE;
-    }
+    int texWidth;
+    int texHeight;
+    bool loadAllGlyphs = CalculateTextureSize(texWidth, texHeight);
 
     SharedArrayPtr<unsigned char> texData(new unsigned char[texWidth * texHeight]);
     for (int y = 0; y < texHeight; ++y)
@@ -240,9 +221,9 @@ bool FontFaceTTF::Load(const unsigned char* fontData, unsigned fontDataSize)
 
     bool hasKerning = FT_HAS_KERNING(face) != 0;
     HashMap<unsigned, unsigned> glyphIndexToCharCodeMapping;
-    
-    // Build glyph mapping
-    AreaAllocator allocator(texWidth, texHeight, texWidth, texHeight);    
+
+    AreaAllocator allocator(texWidth, texHeight, texWidth, texHeight);
+
     FT_UInt glyphIndex;
     FT_ULong charCode = FT_Get_First_Char(face, &glyphIndex);
     while (glyphIndex != 0)
@@ -319,6 +300,7 @@ bool FontFaceTTF::Load(const unsigned char* fontData, unsigned fontDataSize)
         charCode = FT_Get_Next_Char(face, charCode, &glyphIndex);
     }
 
+    // Create face texture
     SharedPtr<Texture2D> texture = CreateFaceTexture(texWidth, texHeight, texData);
     if (!texture)
         return false;
@@ -347,7 +329,7 @@ bool FontFaceTTF::Load(const unsigned char* fontData, unsigned fontDataSize)
         // Freetype's buffer use big endian, need convert to little endian
         for (unsigned i = 0; i < kerningTableSize; i += 2)
             Swap(kerningTable[i], kerningTable[i + 1]);
-        
+
         MemoryBuffer deserializer(kerningTable, kerningTableSize);
 
         unsigned short version = deserializer.ReadUShort();
@@ -431,9 +413,7 @@ const FontGlyph* FontFaceTTF::GetGlyph(unsigned c) const
     FT_Pos ascender = face->size->metrics.ascender;
     FT_Error error = FT_Load_Char(face, c, FT_LOAD_RENDER);
     if (error)
-    {
         return 0;
-    }
 
     MutableFontGlyph* glyph = mutableGlyphList.Back();
     mutableGlyphList.Erase(glyph->iterator_);
@@ -474,16 +454,49 @@ const FontGlyph* FontFaceTTF::GetGlyph(unsigned c) const
         }
     }
 
-	textures_[0]->SetData(0, glyph->x_, glyph->y_, maxGlyphWidth_, maxGlyphHeight_, data);
-	/*
-#ifdef USE_OPENGL
-    textures_[0]->SetData(0, glyph->x_, textures_[0]->GetHeight() - maxGlyphHeight_ - glyph->y_, maxGlyphWidth_, maxGlyphHeight_, data);
-#else
-    textures_[0]->SetData(0, glyph->x_ / 2, glyph->y_ / 2, maxGlyphWidth_, maxGlyphHeight_, data);
-#endif
-	*/
+    textures_[0]->SetData(0, glyph->x_, glyph->y_, maxGlyphWidth_, maxGlyphHeight_, data);
 
     return glyph;
+}
+
+bool FontFaceTTF::CalculateTextureSize(int &texWidth, int &texHeight)
+{
+    bool loadAllGlyphs = true;
+    
+    FT_Face face = (FT_Face)face_;
+    AreaAllocator allocator(FONT_TEXTURE_MIN_SIZE, FONT_TEXTURE_MIN_SIZE, FONT_TEXTURE_MAX_SIZE, FONT_TEXTURE_MAX_SIZE);
+
+    FT_UInt glyphIndex;
+    FT_ULong charCode = FT_Get_First_Char(face, &glyphIndex);
+    while (glyphIndex != 0)
+    {
+        FT_Error error = FT_Load_Glyph(face, glyphIndex, FT_LOAD_DEFAULT);
+        if (error)
+        {
+            charCode = FT_Get_Next_Char(face, charCode, &glyphIndex);
+            continue;
+        }
+
+        int width = ((face->glyph->metrics.width) >> 6);
+        int height = ((face->glyph->metrics.height) >> 6);
+
+        if (loadAllGlyphs)
+        {
+            int x, y;
+            if (!allocator.Allocate(width + 1, height + 1, x, y))
+                loadAllGlyphs = false;
+        }
+
+        maxGlyphWidth_ = Max(maxGlyphWidth_, width + 1);
+        maxGlyphHeight_ = Max(maxGlyphHeight_, height + 1);
+
+        charCode = FT_Get_Next_Char(face, charCode, &glyphIndex);
+    }
+
+    texWidth = allocator.GetWidth();
+    texHeight = allocator.GetHeight();
+
+    return loadAllGlyphs;
 }
 
 SharedPtr<Texture2D> FontFaceTTF::CreateFaceTexture(int texWidth, int texHeight, unsigned char* texData)

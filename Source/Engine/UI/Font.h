@@ -132,6 +132,8 @@ public:
     virtual const FontGlyph* GetGlyph(unsigned c) const;
 
 private:
+    /// Calculate texture size.
+    bool CalculateTextureSize(int &texWidth, int &texHeight);
     /// Create font face texture from data.
     SharedPtr<Texture2D> CreateFaceTexture(int texWidth, int texHeight, unsigned char* texData);
 
