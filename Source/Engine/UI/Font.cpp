@@ -48,7 +48,7 @@ static const int MIN_POINT_SIZE = 6;
 static const int MAX_POINT_SIZE = 48;
 static const int MAX_ASCII_CODE = 127;
 static const int MIN_TEXTURE_SIZE = 128;
-static const int MAX_TEXTURE_SIZE = 1024;
+static const int MAX_TEXTURE_SIZE = 2048;
 
 /// FreeType library subsystem.
 class FreeTypeLibrary : public Object
@@ -467,7 +467,19 @@ bool FontFaceTTF::CalculateTextureSize(int &texWidth, int &texHeight)
     bool loadAllGlyphs = true;
     
     FT_Face face = (FT_Face)face_;
-    AreaAllocator allocator(MIN_TEXTURE_SIZE, MIN_TEXTURE_SIZE, MAX_TEXTURE_SIZE, MAX_TEXTURE_SIZE);
+
+    int maxTexWidth = MAX_TEXTURE_SIZE;
+    int maxTexHeight = MAX_TEXTURE_SIZE;
+    if (pointSize_ < 32)
+        maxTexWidth /= 2;
+    if (pointSize_ < 22)
+        maxTexHeight /= 2;
+    if (pointSize_ < 16)
+        maxTexWidth /= 2;
+    if (pointSize_ < 11)
+        maxTexHeight /= 2;
+
+    AreaAllocator allocator(MIN_TEXTURE_SIZE, MIN_TEXTURE_SIZE, maxTexWidth, maxTexHeight);
 
     FT_UInt glyphIndex;
     FT_ULong charCode = FT_Get_First_Char(face, &glyphIndex);
