@@ -3,6 +3,8 @@ uniform float3 cAmbientStartColor;
 uniform float3 cAmbientEndColor;
 uniform float3 cCameraPos;
 uniform float3x3 cCameraRot;
+uniform float cNearClip;
+uniform float cFarClip;
 uniform float4 cDepthMode;
 uniform float cElapsedTime;
 uniform float3 cFrustumSize;

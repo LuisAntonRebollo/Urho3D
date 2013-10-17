@@ -33,6 +33,8 @@ StringHash VSP_AMBIENTSTARTCOLOR("AmbientStartColor");
 StringHash VSP_AMBIENTENDCOLOR("AmbientEndColor");
 StringHash VSP_CAMERAPOS("CameraPos");
 StringHash VSP_CAMERAROT("CameraRot");
+StringHash VSP_NEARCLIP("NearClip");
+StringHash VSP_FARCLIP("FarClip");
 StringHash VSP_DEPTHMODE("DepthMode");
 StringHash VSP_ELAPSEDTIME("ElapsedTime");
 StringHash VSP_FRUSTUMSIZE("FrustumSize");
